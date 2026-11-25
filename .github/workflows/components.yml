@@ -68,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 6e0e1de633eec601fb527aadb602abe3bc817541
+          ref: 39fa538
           submodules: recursive
       - name: Prepare pinned libnx
         run: |
@@ -79,13 +79,6 @@ jobs:
           git -C libnx checkout b156b4774fb2df7b93402169509266da7547fc4c
           make -j$(nproc) -C libnx/
           cp -r libnx/nx/external/bsd/include libnx/nx
-      - name: Apply variant
-        env:
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          test "$VARIANT" = visible-cache
-          git apply --check patches/visible-cache.patch
-          git apply patches/visible-cache.patch
       - run: make -j$(nproc) LIBNX=$PWD/libnx/nx/ umenu
       - run: |
           mkdir -p out
