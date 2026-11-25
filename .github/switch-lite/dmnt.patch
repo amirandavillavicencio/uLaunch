@@ -1,0 +1,40 @@
+diff --git a/stratosphere/dmnt/source/cheat/impl/dmnt_cheat_api.cpp b/stratosphere/dmnt/source/cheat/impl/dmnt_cheat_api.cpp
+index 521461c..fe96466 100644
+--- a/stratosphere/dmnt/source/cheat/impl/dmnt_cheat_api.cpp
++++ b/stratosphere/dmnt/source/cheat/impl/dmnt_cheat_api.cpp
+@@ -84,6 +84,7 @@ namespace ams::dmnt::cheat::impl {
+                 static constexpr size_t ThreadStackSize = 0x4000;
+             private:
+                 os::SdkMutex m_cheat_lock;
++                os::SdkConditionVariable m_vm_process_attached;
+                 os::Event m_unsafe_break_event;
+                 os::Event m_debug_events_event; /* Autoclear. */
+                 os::ThreadType m_detect_thread, m_debug_events_thread;
+@@ -305,6 +306,7 @@ namespace ams::dmnt::cheat::impl {
+                 }
+ 
+                 Result ForceCloseCheatProcess() {
++                    std::scoped_lock lk(m_cheat_lock);
+                     this->CloseActiveCheatProcess();
+                     R_SUCCEED();
+                 }
+@@ -743,6 +745,10 @@ namespace ams::dmnt::cheat::impl {
+                 {
+                     std::scoped_lock lk(manager->m_cheat_lock);
+ 
++                    while (manager->m_cheat_process_debug_handle == os::InvalidNativeHandle) {
++                        manager->m_vm_process_attached.Wait(manager->m_cheat_lock);
++                    }
++
+                     if (manager->HasActiveCheatProcess()) {
+                         /* Execute VM. */
+                         if (!manager->GetNeedsReloadVm() || manager->m_cheat_vm.LoadProgram(manager->m_cheat_entries, util::size(manager->m_cheat_entries))) {
+@@ -881,6 +887,8 @@ namespace ams::dmnt::cheat::impl {
+             /* Signal to the debug events thread. */
+             m_debug_events_event.Signal();
+ 
++            m_vm_process_attached.Signal();
++
+             /* Signal to our fans. */
+             m_cheat_process_event.Signal();
+ 

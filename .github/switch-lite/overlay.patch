@@ -1,0 +1,55 @@
+diff --git a/README.md b/README.md
+index 0d53898..261ef23 100644
+--- a/README.md
++++ b/README.md
+@@ -99,6 +99,8 @@ make
+ 
+ The Makefile auto-detects available CPU cores for parallel compilation. Output is `ovll.nsp`, packaged into `out/` with the correct Atmosphère directory structure.
+ 
++For a diagnostic build from a clean checkout, use `make DEFINES=-DOVL_PROFILE_HEAP`. Each successful overlay load emits its path and three byte counts through Horizon debug output. `reserved` is the loader heap size, `image_span` covers the image through its aligned writable segment and BSS, and `overlay_capacity` is the capacity passed to the overlay allocator. Measuring live allocations requires instrumentation inside the overlay. Capture the debug output with a debug listener during a separate profiling run.
++
+ ### 3. Distribute (optional)
+ 
+ To produce a zip ready to extract to an SD card:
+diff --git a/source/main.c b/source/main.c
+index 080d645..41c7474 100644
+--- a/source/main.c
++++ b/source/main.c
+@@ -4,6 +4,9 @@
+ #include <string.h>
+ #include <fcntl.h>
+ #include <unistd.h>
++#ifdef OVL_PROFILE_HEAP
++#include <stdio.h>
++#endif
+ 
+ #define DEFAULT_NRO "sdmc:/switch/.overlays/ovlmenu.ovl"
+ #define HEAP_CONFIG_PATH "/config/nx-ovlloader/heap_size.bin"
+@@ -402,9 +405,6 @@ void loadNro(void) {
+         exit(1);
+     }
+ 
+-    // Reset NRO path to load hbmenu by default next time.
+-    g_nextNroPath[0] = '\0';
+-
+     // Read file in one go
+     u64 bytes_read;
+     rc = fsFileRead(&fd, 0, nrobuf, g_heapSize, FsReadOption_None, &bytes_read);
+@@ -494,6 +494,17 @@ void loadNro(void) {
+     entries[1].Value[0] = g_procHandle;
+     entries[3].Value[0] = nro_heap_start;
+     entries[3].Value[1] = g_heapSize + (u64) g_heapAddr - (u64) nro_heap_start;
++#ifdef OVL_PROFILE_HEAP
++    char sample[sizeof(g_nextNroPath) + 128];
++    int length = snprintf(sample, sizeof(sample),
++        "ovl heap: reserved=%llu image_span=%llu overlay_capacity=%llu path=%.*s\n",
++        (unsigned long long)g_heapSize, (unsigned long long)nro_size,
++        (unsigned long long)entries[3].Value[1], (int)sizeof(g_nextNroPath), g_nextNroPath);
++    if (length > 0 && (size_t)length < sizeof(sample))
++        svcOutputDebugString(sample, (u64)length);
++#endif
++    // Default to the overlay menu next time unless the overlay sets a path.
++    g_nextNroPath[0] = '\0';
+     entries[4].Value[1] = (u64) &g_argv[0];
+     entries[5].Value[0] = (u64) &g_nextNroPath[0];
+     entries[5].Value[1] = (u64) &g_nextArgv[0];

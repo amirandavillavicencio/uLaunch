@@ -1,7 +1,11 @@
 
 name: Build uLaunch
 
-on: [workflow_dispatch, push, pull_request]
+on:
+  workflow_dispatch:
+  push:
+    branches: [switch-lite-os]
+  pull_request:
 
 jobs:
   uLaunch:
