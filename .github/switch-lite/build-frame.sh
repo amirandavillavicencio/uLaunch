@@ -11,7 +11,7 @@ scratch=$(mktemp -d "${RUNNER_TEMP:-/tmp}/frame-build.XXXXXXXX")
 frame="$scratch/frame"
 atmosphere="$scratch/Atmosphere-1.12.2"
 image=${DKP_IMG:-devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d}
-[[ "$image" =~ @sha256:[0-9a-f]{64}$ ]] || { echo "Expected a pinned DKP_IMG" >&2; exit 2; }
+[[ "$image" =~ (^|@)sha256:[0-9a-f]{64}$ ]] || { echo "Expected a pinned DKP_IMG" >&2; exit 2; }
 
 git clone --quiet --depth 1 --branch v0.7.23 https://github.com/TomasUribe/switch-frame-tap.git "$frame"
 [[ $(git -C "$frame" rev-parse HEAD) == a024ac0eca1e22044744ed85fb7c2eb9ad5d34b4 ]]

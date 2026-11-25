@@ -7,7 +7,7 @@ case "$variant" in
     *) echo "Expected baseline or experimental" >&2; exit 2 ;;
 esac
 : "${DKP_IMG:?Set DKP_IMG to the devkitPro image with a SHA256 digest}"
-[[ "$DKP_IMG" =~ @sha256:[0-9a-f]{64}$ ]]
+[[ "$DKP_IMG" =~ (^|@)sha256:[0-9a-f]{64}$ ]]
 patch_dir=$(cd "$(dirname "$0")" && pwd)
 output_dir=$(pwd)/out
 work=$(mktemp -d)

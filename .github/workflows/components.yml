@@ -17,6 +17,11 @@ jobs:
         variant: [baseline, experimental]
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare pinned libnx for libstratosphere
+        if: matrix.component != 'overlay'
+        run: |
+          docker build --build-arg DKP_BASE="$DKP_IMG" --iidfile "$RUNNER_TEMP/build-image" .github/switch-lite
+          echo "DKP_IMG=$(cat "$RUNNER_TEMP/build-image")" >> "$GITHUB_ENV"
       - run: bash .github/switch-lite/build-${{ matrix.component }}.sh ${{ matrix.variant }}
       - run: cd out && sha256sum exefs.nsp > SHA256SUMS
       - uses: actions/upload-artifact@v4
