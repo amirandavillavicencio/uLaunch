@@ -1,8 +1,6 @@
 name: Switch Lite OS paired builds
 on:
   workflow_dispatch:
-  push:
-    branches: [switch-lite-umenu-visible-cache]
 permissions:
   contents: read
 env:
@@ -68,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 39fa538
+          ref: 39fa538dbed279b9abb1fd72c7bf1e7f68cfaedf
           submodules: recursive
       - name: Prepare pinned libnx
         run: |
