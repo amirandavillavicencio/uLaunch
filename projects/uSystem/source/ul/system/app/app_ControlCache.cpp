@@ -3,7 +3,7 @@
 #include <ul/util/util_Scope.hpp>
 #include <ul/util/util_Size.hpp>
 #include <queue>
-#include <algorithm>
+#include <switch/kernel/uevent.h>
 #include <cstring>
 #include <unordered_map>
 #include <ul/fs/fs_Stdio.hpp>
@@ -26,6 +26,7 @@ namespace ul::system::app {
         ul::Mutex g_ApplicationCacheLock;
 
         Thread g_ApplicationControlCacheThread;
+        UEvent g_CacheWorkAvailable;
         constexpr size_t ApplicationControlCacheThreadStackSize = 64_KB;
 
         constexpr size_t PerApplicationCacheUsage = sizeof(ApplicationNacpMisc) + sizeof(u64);
@@ -38,7 +39,7 @@ namespace ul::system::app {
             UL_LOG_INFO("[ApplicationControlCache] Cache memory usage: %f MB", total_size / 1024.0f / 1024.0f);
         }
 
-        void RemoveNextApplicationCache() {
+        bool RemoveNextApplicationCache() {
             ScopedLock lock(g_PendingApplicationRemovalCacheQueueLock);
 
             if(!g_PendingApplicationRemovalCacheQueue->empty()) {
@@ -47,9 +48,7 @@ namespace ul::system::app {
                 g_PendingApplicationRemovalCacheQueue->pop();
 
                 ScopedLock lock2(g_ApplicationCacheLock);
-                const auto app_it = std::find_if(g_ApplicationCache->begin(), g_ApplicationCache->end(), [app_id](const auto &entry) {
-                    return entry.first == app_id;
-                });
+                const auto app_it = g_ApplicationCache->find(app_id);
                 if(app_it != g_ApplicationCache->end()) {
                     g_ApplicationCache->erase(app_it);
                     UL_LOG_INFO("[ApplicationControlCache] Removed application cache for application ID 0x%016lX", app_id);
@@ -58,7 +57,9 @@ namespace ul::system::app {
                 else {
                     UL_LOG_WARN("[ApplicationControlCache] Failed to remove application cache for application ID 0x%016lX, not found in cache", app_id);
                 }
+                return true;
             }
+            return false;
         }
 
         inline Result GetApplicationControlData(const u64 app_id, NsApplicationControlData *out_data, size_t &out_icon_size) {
@@ -82,7 +83,7 @@ namespace ul::system::app {
             return fs::WriteFile(path, &nacp_metadata, sizeof(nacp_metadata), true);
         }
 
-        void AddNextApplicationCache() {
+        bool AddNextApplicationCache() {
             ScopedLock lock(g_PendingApplicationCacheQueueLock);
 
             if(!g_PendingApplicationCacheQueue->empty()) {
@@ -161,17 +162,23 @@ namespace ul::system::app {
                 }
 
                 g_PendingApplicationCacheQueue->pop();
+                return true;
             }
+            return false;
         }
 
         void ApplicationControlCacheMain(void*) {
             UL_LOG_INFO("[ApplicationControlCache] alive!");
 
             while(true) {
-                RemoveNextApplicationCache();
-                AddNextApplicationCache();
-
-                svcSleepThread(10'000'000);
+                const bool removed = RemoveNextApplicationCache();
+                const bool added = AddNextApplicationCache();
+                if(removed || added) {
+                    svcSleepThread(10'000'000);
+                }
+                else {
+                    UL_RC_ASSERT(waitSingle(waiterForUEvent(&g_CacheWorkAvailable), UINT64_MAX));
+                }
             }
         }
 
@@ -194,6 +201,7 @@ namespace ul::system::app {
         g_PendingApplicationRemovalCacheQueue = new std::queue<u64>();
         g_ApplicationCache = new std::unordered_map<u64, ApplicationNacpMisc>();
 
+        ueventCreate(&g_CacheWorkAvailable, true);
         for(const auto &record : records) {
             g_PendingApplicationCacheQueue->push(record.id);
         }
@@ -209,19 +217,19 @@ namespace ul::system::app {
     void RequestCacheApplication(const u64 app_id) {
         ScopedLock lock(g_PendingApplicationCacheQueueLock);
         g_PendingApplicationCacheQueue->push(app_id);
+        ueventSignal(&g_CacheWorkAvailable);
     }
 
     void RequestRemoveApplicationCache(const u64 app_id) {
         ScopedLock lock(g_PendingApplicationRemovalCacheQueueLock);
         g_PendingApplicationRemovalCacheQueue->push(app_id);
+        ueventSignal(&g_CacheWorkAvailable);
     }
 
     bool QueryApplicationNacpMisc(const u64 app_id, ApplicationNacpMisc &out_nacp_misc) {
         ScopedLock lock(g_ApplicationCacheLock);
 
-        const auto app_it = std::find_if(g_ApplicationCache->begin(), g_ApplicationCache->end(), [app_id](const auto &entry) {
-            return entry.first == app_id;
-        });
+        const auto app_it = g_ApplicationCache->find(app_id);
         if(app_it != g_ApplicationCache->end()) {
             out_nacp_misc = app_it->second;
             return true;
@@ -233,10 +241,6 @@ namespace ul::system::app {
     bool LoopQueryApplicationNacpMisc(const u64 app_id, ApplicationNacpMisc &out_nacp_misc) {
         u32 i = 0;
         while(true) {
-            if(IsQueryLocked()) {
-                continue;
-            }
-
             if(QueryApplicationNacpMisc(app_id, out_nacp_misc)) {
                 return true;
             }

@@ -1,7 +1,7 @@
 
 name: Build uLaunch
 
-on: [push, pull_request]
+on: [workflow_dispatch, push, pull_request]
 
 jobs:
   uLaunch:
@@ -9,7 +9,7 @@ jobs:
     container: devkitpro/devkita64:latest
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -24,19 +24,23 @@ jobs:
     - name: Set workspace permissions
       run: chmod 777 -R "$GITHUB_WORKSPACE"
     
-    - name: Prepare master libnx
+    - name: Prepare libnx
       run: |
         git clone https://github.com/switchbrew/libnx
-        make -C libnx/
+        git -C libnx checkout b156b4774fb2df7b93402169509266da7547fc4c
+        make -j$(nproc) -C libnx/
         cp -r libnx/nx/external/bsd/include libnx/nx
     
     - name: Compile
       run: |
-        make -j$(nproc) LIBNX=$PWD/libnx/nx/ usystem uloader umenu umanager
-        zip -r SdOut.zip SdOut
+        make -j$(nproc) LIBNX=$PWD/libnx/nx/ usystem
+        cd SdOut
+        cmp atmosphere/contents/0100000000001000/exefs.nsp ulaunch/bin/uSystem/exefs.nsp
+        sha256sum atmosphere/contents/0100000000001000/exefs.nsp ulaunch/bin/uSystem/exefs.nsp > SHA256SUMS
+        sha256sum -c SHA256SUMS
         
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v4
       with:
-        name: SdOut
-        path: SdOut.zip
+        name: experimental-uSystem
+        path: SdOut/
         if-no-files-found: error
