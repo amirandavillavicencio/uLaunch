@@ -124,6 +124,7 @@ namespace ul::menu::ui {
             void CleanOverTexts();
             void LoadOverText(const u32 idx);
             bool LoadEntry(const u32 idx);
+            void TrimEntryIconCache();
 
             void NotifyFocusedEntryChanged(const s32 prev_entry_idx, const s32 is_prev_entry_suspended_override = -1);
 

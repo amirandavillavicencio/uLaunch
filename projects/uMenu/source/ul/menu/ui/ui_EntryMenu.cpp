@@ -217,6 +217,19 @@ namespace ul::menu::ui {
         this->cur_entry_idx = idx;
     }
 
+    void EntryMenu::TrimEntryIconCache() {
+        const auto visible_begin = this->base_entry_idx_x * g_EntryHeightCount;
+        const auto visible_columns = this->entry_width_count + this->extra_entry_swipe_show_h_count;
+        const auto visible_end = std::min<u32>(this->cur_entries.size(), visible_begin + visible_columns * g_EntryHeightCount);
+
+        for(u32 idx = 0; idx < this->entry_icons.size(); idx++) {
+            if((idx < visible_begin || idx >= visible_end) && this->entry_icons[idx] != this->selected_entry_icon) {
+                this->entry_icons[idx] = {};
+                pu::ui::render::DeleteTexture(this->entry_over_texts[idx]);
+            }
+        }
+    }
+
     Entry &EntryMenu::GetEntry(const s32 index) {
         UL_ASSERT_TRUE(index >= 0);
         UL_ASSERT_TRUE((u32)index < this->cur_entries.size());
@@ -301,6 +314,10 @@ namespace ul::menu::ui {
             else {
                 this->pending_load_img_entry_ext_idx++;
             }
+        }
+
+        if(this->swipe_mode == SwipeMode::None && !this->IsCursorInTransition()) {
+            this->TrimEntryIconCache();
         }
 
         if(this->entries_base_swipe_neg_offset_incr.Increment(this->entries_base_swipe_neg_offset)) {
